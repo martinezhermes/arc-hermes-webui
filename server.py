@@ -99,6 +99,17 @@ from urllib.parse import urlparse
 
 logger = logging.getLogger(__name__)
 
+# Isolated Python launchers may execute this file through runpy without adding
+# its directory to sys.path. Keep local api imports anchored to this checkout.
+_repo_root = os.path.dirname(os.path.abspath(__file__))
+if _repo_root not in sys.path:
+    sys.path.insert(0, _repo_root)
+
+# The managed Agent activates its Python dependencies on import. An isolated
+# Agent launcher needs that activation before WebUI imports use those packages.
+if sys.flags.isolated and os.environ.get("HERMES_WEBUI_AGENT_DIR"):
+    import run_agent  # noqa: F401
+
 from api.auth import check_auth, reset_trusted_auth_request_state
 from api.config import HOST, PORT, STATE_DIR, SESSION_DIR, DEFAULT_WORKSPACE
 from api.helpers import (
