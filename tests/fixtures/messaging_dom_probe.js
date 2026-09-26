@@ -29,7 +29,7 @@ function button(root, label, last = false) {
   assert(matches.length, 'Missing button: ' + label);
   return last ? matches.at(-1) : matches[0];
 }
-const containers = {connectionsContent: new Element('div'), conversationsContent: new Element('div')};
+const containers = {connectionsContent: new Element('div'), arcConnectorsContent: new Element('div'), conversationsContent: new Element('div')};
 Object.values(containers).forEach(node => roots.add(node));
 global.document = {
   hidden: false, baseURI: 'http://synthetic.invalid/',
@@ -50,8 +50,26 @@ let heldDirectory, heldHistory, directoryResolve, historyResolve;
 const directory = name => ({items:[{id:'room',name}],nextOffset:null});
 const history = message => ({items:[{text:message,senderId:'synthetic',messageId:'message'}]});
 const requests = [];
+let gatewayEnabled = true;
+let arcEnabled = true;
 global.api = async (url, options) => {
   requests.push({url, options});
+  if (url.includes('/api/messaging/connections?')) return {profile:'work', platforms:[
+    {id:'whatsapp',name:'WhatsApp',enabled:gatewayEnabled,configured:true,state:gatewayEnabled?'connected':'disabled',env_vars:[]},
+    {id:'slack',name:'Slack',enabled:false,configured:false,state:'disabled',env_vars:[]},
+  ]};
+  if (url.includes('/api/arc/connectors/whatsapp/configure?')) {
+    arcEnabled = JSON.parse(options.body).enabled;
+    return {ok:true};
+  }
+  if (url.includes('/api/arc/connectors?')) return {profile:'work', connectors:[{
+    id:'arc-whatsapp', enabled:arcEnabled, port:9131, token_file_set:true,
+    connection:arcEnabled?connection:{configured:false},
+  }]};
+  if (url.includes('/api/messaging/platforms/whatsapp/configure?')) {
+    gatewayEnabled = JSON.parse(options.body).enabled;
+    return {ok:true,platform:'whatsapp'};
+  }
   if (url.includes('/connection?')) return connection;
   if (url.includes('/groups.list')) {
     if (heldDirectory) return new Promise(resolve => { directoryResolve = resolve; });
@@ -66,6 +84,28 @@ global.api = async (url, options) => {
 require('../../static/messaging.js');
 const turn = () => new Promise(resolve => setImmediate(resolve));
 async function run() {
+  await MessagingWorkspace.open('connections');
+  let connections = containers.connectionsContent;
+  assert(connections.textContent.includes('messaging_gateway_section'));
+  assert(!connections.textContent.includes('ARC WhatsApp'));
+  button(connections, 'messaging_disable_gateway').events.click();
+  await turn();
+  assert.equal(gatewayEnabled, false);
+  assert(button(connections, 'messaging_enable_gateway'));
+  assert(requests.some(item => item.url.includes('/api/messaging/platforms/whatsapp/configure?') &&
+    JSON.parse(item.options.body).enabled === false));
+
+  await MessagingWorkspace.open('arcConnectors');
+  const arc = containers.arcConnectorsContent;
+  assert(arc.textContent.includes('ARC WhatsApp'));
+  assert(!arc.textContent.includes('WhatsApp Gateway'));
+  button(arc, 'messaging_disable_arc').events.click();
+  await turn();
+  assert.equal(arcEnabled, false);
+  assert(button(arc, 'messaging_enable_arc'));
+  assert(requests.some(item => item.url.includes('/api/arc/connectors/whatsapp/configure?') &&
+    JSON.parse(item.options.body).enabled === false));
+
   await MessagingWorkspace.open('conversations', {messagingSource:'groups'});
   await turn();
   const root = containers.conversationsContent;

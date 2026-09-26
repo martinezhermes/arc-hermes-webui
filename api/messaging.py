@@ -10,7 +10,7 @@ import importlib
 import json
 import logging
 import re
-from urllib.parse import parse_qs
+from urllib.parse import parse_qs, urlsplit
 
 from api.helpers import j
 
@@ -90,30 +90,80 @@ async def _connections(profile):
     result = await agent_module("messaging").get_messaging_platforms(profile=profile)
     platforms = []
     for item in result.get("platforms", []):
-        if item.get("id") == "whatsapp":
-            # ARC owns this account binding. Do not offer the legacy Baileys
-            # pairing flow alongside its native session owner.
-            continue
         public = {key: item[key] for key in _PLATFORM_KEYS if key in item}
+        if item.get("id") == "whatsapp" and isinstance(item.get("whatsapp_setup"), dict):
+            public["whatsapp_setup"] = {
+                key: item["whatsapp_setup"][key]
+                for key in ("mode", "allowed_users_set", "home_channel_set")
+                if key in item["whatsapp_setup"]
+            }
         public["env_vars"] = [
             {key: field[key] for key in _FIELD_KEYS if key in field}
             for field in item.get("env_vars", [])
         ]
         platforms.append(public)
+    return {"profile": profile, "platforms": platforms}
+
+
+def _arc_settings(config):
+    value = config.get("arc_whatsapp", {}) if isinstance(config, dict) else {}
+    return value if isinstance(value, dict) else {}
+
+
+def _arc_port(settings):
     try:
-        whatsapp, status = _unpack(await agent_module("arc_whatsapp").get_connection(profile=profile))
-        if status != 200:
-            whatsapp = {"available": False, "error": whatsapp.get("detail", {})}
-    except ImportError:
-        whatsapp = {"available": False, "error": {
-            "code": "backend_unavailable", "message": "Install the ARC WhatsApp integration on this server.",
-        }}
-    except Exception as error:
-        logger.warning("ARC connection check failed (%s)", type(error).__name__)
-        whatsapp = {"available": False, "error": {
-            "code": "backend_error", "message": "The WhatsApp connection could not be checked. Refresh its status before continuing.",
-        }}
-    return {"profile": profile, "platforms": platforms, "whatsapp": whatsapp}
+        parsed = urlsplit(settings.get("base_url", "http://127.0.0.1:9131"))
+        if parsed.scheme == "http" and parsed.hostname == "127.0.0.1" and parsed.port:
+            return parsed.port
+    except (TypeError, ValueError):
+        pass
+    return None
+
+
+async def _arc_connectors(profile):
+    settings = _arc_settings(await agent_module("config_env").get_config(profile=profile))
+    enabled = settings.get("enabled") is True
+    connection = {"configured": False}
+    if enabled:
+        try:
+            connection, status = _unpack(await agent_module("arc_whatsapp").get_connection(profile=profile))
+            if status != 200:
+                connection = {"configured": True, "error": connection.get("detail", {})}
+        except Exception as error:
+            logger.warning("ARC connector status failed (%s)", type(error).__name__)
+            connection = {"configured": True, "error": {
+                "code": "backend_error", "message": "The ARC WhatsApp connection could not be checked.",
+            }}
+    return {"profile": profile, "connectors": [{
+        "id": "arc-whatsapp", "enabled": enabled, "port": _arc_port(settings),
+        "token_file_set": bool(settings.get("token_file")), "connection": connection,
+    }]}
+
+
+async def _configure_arc_connector(profile, body):
+    if set(body) - {"enabled", "port", "token_file"} or not body:
+        raise WorkspaceError("invalid_body", "Unsupported ARC connector setting.")
+    if "enabled" in body and type(body["enabled"]) is not bool:
+        raise WorkspaceError("invalid_body", "Enabled must be true or false.")
+    config = _arc_settings(await agent_module("config_env").get_config(profile=profile))
+    update = {}
+    if "enabled" in body:
+        update["enabled"] = body["enabled"]
+    if "port" in body:
+        if type(body["port"]) is not int or not 1 <= body["port"] <= 65535:
+            raise WorkspaceError("invalid_port", "Choose a valid local ARC API port.")
+        update["base_url"] = f"http://127.0.0.1:{body['port']}"
+    if "token_file" in body:
+        path = body["token_file"]
+        if not isinstance(path, str) or not 1 <= len(path.strip()) <= 1024 or any(ord(c) < 32 for c in path):
+            raise WorkspaceError("invalid_token_file", "Choose an existing private ARC credential file path.")
+        update["token_file"] = path.strip()
+    if update.get("enabled", config.get("enabled") is True) and not update.get("token_file", config.get("token_file")):
+        raise WorkspaceError("missing_token_file", "Configure a registered ARC credential file before enabling.")
+    from hermes_cli.web_models import ConfigUpdate
+    result = await agent_module("config_env").update_config(
+        ConfigUpdate(config={"arc_whatsapp": update}, profile=profile), profile=profile)
+    return result
 
 
 def _conversations(parsed, profile):
@@ -202,7 +252,7 @@ def _failure(handler, error, *, mutation=False):
 
 
 def handles(path):
-    return path.startswith(("/api/messaging/", "/api/arc/whatsapp/"))
+    return path.startswith(("/api/messaging/", "/api/arc/whatsapp/", "/api/arc/connectors"))
 
 
 def handle_get(handler, parsed):
@@ -214,6 +264,8 @@ def handle_get(handler, parsed):
             return _reply(handler, asyncio.run(_connections(profile)))
         if parsed.path == "/api/messaging/conversations":
             return _reply(handler, _conversations(parsed, profile))
+        if parsed.path == "/api/arc/connectors":
+            return _reply(handler, asyncio.run(_arc_connectors(profile)))
         if parsed.path == "/api/arc/whatsapp/connection":
             payload, status = _unpack(asyncio.run(agent_module("arc_whatsapp").get_connection(profile=profile)))
             return _reply(handler, payload, status)
@@ -235,11 +287,11 @@ def handle_post(handler, parsed):
     try:
         profile = _profile(parsed, mutation=True)
         body = _body(handler)
+        if parsed.path == "/api/arc/connectors/whatsapp/configure":
+            return _reply(handler, asyncio.run(_configure_arc_connector(profile, body)))
         match = re.fullmatch(r"/api/messaging/platforms/([a-z0-9_-]+)/(configure|test)", parsed.path)
         if match:
             platform, action = match.groups()
-            if platform == "whatsapp":
-                raise WorkspaceError("arc_account_required", "Manage WhatsApp through its ARC application connection.", 409)
             if set(body) - {"enabled", "env", "clear_env"}:
                 raise WorkspaceError("invalid_body", "Unsupported messaging configuration field.")
             service = agent_module("messaging")

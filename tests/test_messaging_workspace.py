@@ -56,29 +56,95 @@ def test_connections_remove_credential_fragments_and_capture_profile(monkeypatch
 
     async def platforms(profile):
         calls.append(profile)
-        return {"platforms": [{"id": "slack", "name": "Slack", "enabled": True,
+        return {"platforms": [{"id": "whatsapp", "name": "WhatsApp", "enabled": True,
+                               "configured": True, "state": "connected",
+                               "whatsapp_setup": {"mode": "bot", "allowed_users_set": True}},
+                              {"id": "slack", "name": "Slack", "enabled": True,
                                "configured": True, "state": "connected",
                                "env_vars": [{"key": "SLACK_BOT_TOKEN", "is_set": True,
                                              "redacted_value": "secret-prefix...suffix",
                                              "value": "never expose", "is_password": True}]}]}
 
-    async def connection(profile):
-        calls.append(profile)
-        return {"configured": False}
-
     monkeypatch.setattr(messaging, "active_profile", lambda: "work")
     monkeypatch.setattr(messaging, "agent_module", lambda name: SimpleNamespace(
-        get_messaging_platforms=platforms, get_connection=connection))
+        get_messaging_platforms=platforms))
     handler = Handler()
     messaging.handle_get(handler, urlparse("/api/messaging/connections?profile=work"))
     assert handler.status == 200
     payload = handler.result()
     assert payload["profile"] == "work"
-    assert calls == ["work", "work"]
-    assert payload["platforms"][0]["env_vars"][0]["is_set"] is True
+    assert calls == ["work"]
+    assert payload["platforms"][0]["id"] == "whatsapp"
+    assert payload["platforms"][0]["whatsapp_setup"] == {"mode": "bot", "allowed_users_set": True}
+    assert payload["platforms"][1]["env_vars"][0]["is_set"] is True
     assert "secret-prefix" not in handler.wfile.getvalue().decode()
     assert "never expose" not in handler.wfile.getvalue().decode()
     assert handler.response_headers["cache-control"] == "no-store"
+
+
+def test_gateway_whatsapp_can_be_disabled_without_changing_arc_connection(monkeypatch):
+    from api import messaging
+
+    calls = []
+
+    async def configure(platform, model, profile):
+        calls.append((platform, model.enabled, model.env, model.clear_env, profile))
+        return {"ok": True, "platform": platform}
+
+    monkeypatch.setattr(messaging, "active_profile", lambda: "work")
+    monkeypatch.setattr(messaging, "agent_module", lambda name: (
+        SimpleNamespace(update_messaging_platform=configure) if name == "messaging"
+        else pytest.fail("Gateway toggle reached ARC connector")))
+    handler = Handler({"enabled": False, "env": {}, "clear_env": []})
+    messaging.handle_post(handler, urlparse("/api/messaging/platforms/whatsapp/configure?profile=work"))
+    assert handler.status == 200, handler.result()
+    assert calls == [("whatsapp", False, {}, [], "work")]
+
+
+def test_arc_connector_setup_is_profile_scoped_and_hides_credential_path(monkeypatch):
+    from api import messaging
+
+    saved = []
+
+    async def config(profile):
+        return {"arc_whatsapp": {"enabled": False, "base_url": "http://127.0.0.1:9131",
+                                 "token_file": "credentials/private-arc.token"}}
+
+    async def update(model, profile):
+        saved.append((model.config, model.profile, profile))
+        return {"ok": True}
+
+    monkeypatch.setattr(messaging, "active_profile", lambda: "work")
+    monkeypatch.setattr(messaging, "agent_module", lambda name: SimpleNamespace(
+        get_config=config, update_config=update) if name == "config_env"
+        else pytest.fail("Disabled ARC connector reached native account"))
+    handler = Handler()
+    messaging.handle_get(handler, urlparse("/api/arc/connectors?profile=work"))
+    assert handler.status == 200, handler.result()
+    assert handler.result()["connectors"][0] == {
+        "id": "arc-whatsapp", "enabled": False, "port": 9131, "token_file_set": True,
+        "connection": {"configured": False},
+    }
+    assert "private-arc.token" not in handler.wfile.getvalue().decode()
+
+    handler = Handler({"enabled": True, "port": 9132, "token_file": "credentials/new-arc.token"})
+    messaging.handle_post(handler, urlparse("/api/arc/connectors/whatsapp/configure?profile=work"))
+    assert handler.status == 200, handler.result()
+    assert saved == [({"arc_whatsapp": {"enabled": True, "base_url": "http://127.0.0.1:9132",
+                                         "token_file": "credentials/new-arc.token"}}, "work", "work")]
+
+
+def test_arc_connector_rejects_browser_selected_backend_and_stale_profile(monkeypatch):
+    from api import messaging
+
+    monkeypatch.setattr(messaging, "active_profile", lambda: "work")
+    monkeypatch.setattr(messaging, "agent_module", lambda _: pytest.fail("Invalid ARC setup reached backend"))
+    handler = Handler({"enabled": True, "base_url": "http://other-host:9131"})
+    messaging.handle_post(handler, urlparse("/api/arc/connectors/whatsapp/configure?profile=work"))
+    assert handler.status == 400
+    handler = Handler({"enabled": False})
+    messaging.handle_post(handler, urlparse("/api/arc/connectors/whatsapp/configure?profile=other"))
+    assert handler.status == 409
 
 
 @pytest.mark.parametrize("path", ["/api/messaging/connections", "/api/arc/whatsapp/connection"])

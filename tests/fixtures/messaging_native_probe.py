@@ -152,9 +152,23 @@ def main():
                 status, data, _ = call("/api/messaging/connections?profile=default")
                 assert status == 200, data
                 connections = json.loads(data)
-                assert connections["whatsapp"]["access"]["principal"]["id"] == "synthetic-reader", data
+                assert any(item["id"] == "whatsapp" for item in connections["platforms"]), data
+                status, data, _ = call("/api/arc/connectors?profile=default")
+                assert status == 200, data
+                arc_connector = json.loads(data)["connectors"][0]
+                assert arc_connector["connection"]["access"]["principal"]["id"] == "synthetic-reader", data
+                assert arc_connector["token_file_set"] is True and arc_connector["port"] == native.server_port
+                assert str(credential).encode() not in data
                 assert ("a" * 64).encode() not in data
                 assert b"redacted_value" not in data
+                status, data, _ = call("/api/arc/connectors/whatsapp/configure?profile=default", {"enabled": False})
+                assert status == 200, data
+                status, data, _ = call("/api/arc/connectors?profile=default")
+                assert status == 200 and json.loads(data)["connectors"][0]["enabled"] is False, data
+                status, data, _ = call("/api/arc/connectors/whatsapp/configure?profile=default", {"enabled": True})
+                assert status == 200, data
+                status, data, _ = call("/api/arc/connectors?profile=default")
+                assert status == 200 and json.loads(data)["connectors"][0]["connection"]["status"]["phase"] == "ready", data
                 status, data, _ = call("/api/messaging/conversations?profile=default&platform=slack")
                 assert status == 200, data
                 conversations = json.loads(data)["items"]

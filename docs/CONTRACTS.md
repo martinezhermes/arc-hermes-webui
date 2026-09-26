@@ -95,7 +95,7 @@ that slice.
 
 ## UI, UX, and theme contracts
 
-- [Messaging workspace](messaging-workspace.md): Connections and Conversations,
+- [Messaging workspace](messaging-workspace.md): Connections, ARC Connectors, and Conversations,
   agent-session visibility, native room-history coverage, profile capture,
   credential custody and deliberate messaging operations.
 

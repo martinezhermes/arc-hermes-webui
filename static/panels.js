@@ -40,12 +40,12 @@ let _logsSeverityFilter = 'all';
 
 // Map of panel names → i18n keys for the app titlebar label.
 const APP_TITLEBAR_KEYS = {
-  connections: 'tab_connections', conversations: 'tab_conversations',
+  connections: 'tab_connections', arcConnectors: 'tab_arc_connectors', conversations: 'tab_conversations',
   chat: 'tab_chat', tasks: 'tab_tasks', skills: 'tab_skills',
   memory: 'tab_memory', workspaces: 'tab_workspaces',
   profiles: 'tab_profiles', todos: 'tab_todos', insights: 'tab_insights', logs: 'tab_logs', settings: 'tab_settings',
 };
-const MAIN_VIEW_PANELS = ['connections','conversations','settings','skills','memory','tasks','kanban','workspaces','profiles','insights','logs','plugin'];
+const MAIN_VIEW_PANELS = ['connections','arcConnectors','conversations','settings','skills','memory','tasks','kanban','workspaces','profiles','insights','logs','plugin'];
 const MAIN_VIEW_SIDEBAR_PANEL_FALLBACKS = { plugin: 'settings' };
 
 /**
@@ -455,7 +455,7 @@ async function switchPanel(name, opts = {}) {
     });
   }
   // Lazy-load panel data
-  if (nextPanel === 'connections' || nextPanel === 'conversations') await MessagingWorkspace.open(nextPanel, opts);
+  if (nextPanel === 'connections' || nextPanel === 'arcConnectors' || nextPanel === 'conversations') await MessagingWorkspace.open(nextPanel, opts);
   if (nextPanel === 'tasks') await loadCrons();
   if (nextPanel === 'kanban') await loadKanban();
   if (nextPanel === 'skills') await loadSkills();
@@ -7074,7 +7074,7 @@ async function switchToProfile(name) {
     if (_switchGen !== _profileSwitchGeneration) return false;
     S.activeProfile = data.active || name;
     S.activeProfileIsDefault = !!data.is_default;
-    if (window.MessagingWorkspace && ['connections','conversations'].includes(_currentPanel)) {
+    if (window.MessagingWorkspace && ['connections','arcConnectors','conversations'].includes(_currentPanel)) {
       await MessagingWorkspace.open(_currentPanel);
     }
     if (typeof _resetCronUnreadForProfileSwitch === 'function') {

@@ -136,6 +136,7 @@
     try {
       let data;
       if (panel === 'connections') data = await request(ctx, '/api/messaging/connections');
+      else if (panel === 'arcConnectors') data = await request(ctx, '/api/arc/connectors');
       else {
         // Agent transcripts remain available even without a native application
         // binding or the agent's optional channel-management dependencies.
@@ -145,9 +146,10 @@
         data = { whatsapp, platforms: [] };
       }
       if (!current(ctx)) return;
-      ctx.connection = data.whatsapp;
+      ctx.connection = panel === 'arcConnectors' ? data.connectors?.[0]?.connection : data.whatsapp;
       container.replaceChildren();
       if (panel === 'connections') renderConnections(ctx, data);
+      else if (panel === 'arcConnectors') renderArcConnectors(ctx, data);
       else renderConversations(ctx, data);
     } catch (error) {
       if (current(ctx)) {
@@ -159,22 +161,74 @@
   }
   function connectionSummary(ctx, container) {
     const connection = ctx.connection || {};
+    const connector = ctx.arcConnector || {};
     const row = element('section', 'messaging-card');
-    row.dataset.platformId = 'whatsapp';
+    row.dataset.platformId = 'arc-whatsapp';
     const heading = element('div', 'messaging-row');
-    heading.append(element('h2', '', 'WhatsApp'), element('span', 'messaging-status',
-      connection.status ? connection.status.phase : text(connection.configured === false ? 'messaging_not_configured' : 'messaging_unavailable')));
+    heading.append(element('h2', '', 'ARC WhatsApp'), element('span', 'messaging-status',
+      connector.enabled ? (connection.status ? connection.status.phase : text(connection.configured === false ? 'messaging_not_configured' : 'messaging_unavailable')) : text('messaging_disabled')));
     row.append(heading);
+    note(row, text('messaging_arc_binding_note'));
     if (connection.error) note(row, connection.error.message || text('messaging_unavailable'), true);
     if (connection.account) note(row, connection.account.name || connection.account.id);
     if (connection.access && connection.access.principal) {
       const principal = connection.access.principal;
       note(row, principal.id + ' · ' + text(principal.administrator ? 'messaging_administrator' : 'messaging_scoped_access'));
       row.append(button(text('tab_conversations'), () => switchPanel('conversations', { messagingSource: 'groups' })));
-    } else {
+    } else if (connector.enabled) {
       note(row, text('messaging_whatsapp_setup'));
     }
+    const actions = element('div', 'messaging-row');
+    const form = element('form', 'messaging-config');
+    form.hidden = true;
+    const enabled = element('input');
+    enabled.type = 'checkbox'; enabled.checked = !!connector.enabled;
+    const enableLabel = element('label', 'messaging-check');
+    enableLabel.append(enabled, document.createTextNode(text('messaging_enabled')));
+    form.append(enableLabel);
+    const portLabel = element('label', 'messaging-field', text('messaging_arc_port'));
+    const port = element('input');
+    port.type = 'number'; port.min = '1'; port.max = '65535'; port.required = true;
+    port.value = connector.port || 9131;
+    portLabel.append(port); form.append(portLabel);
+    const tokenLabel = element('label', 'messaging-field', text('messaging_arc_token_file'));
+    const tokenFile = element('input');
+    tokenFile.type = 'text'; tokenFile.autocomplete = 'off';
+    tokenFile.placeholder = text(connector.token_file_set ? 'messaging_keep_saved' : 'messaging_arc_token_placeholder');
+    tokenLabel.append(tokenFile); form.append(tokenLabel);
+    note(form, text('messaging_arc_setup_note'));
+    const save = element('button', 'messaging-button', text('messaging_save'));
+    save.type = 'submit'; form.append(save);
+    form.addEventListener('input', () => { ctx.dirty = true; });
+    form.addEventListener('submit', async event => {
+      event.preventDefault();
+      const body = { enabled: enabled.checked, port: Number(port.value) };
+      if (tokenFile.value.trim()) body.token_file = tokenFile.value.trim();
+      const result = await mutate(ctx, form, () => request(ctx,
+        '/api/arc/connectors/whatsapp/configure', body));
+      if (result && current(ctx)) { ctx.dirty = false; await open('arcConnectors'); }
+    });
+    actions.append(button(text('messaging_configure'), () => { form.hidden = !form.hidden; }));
+    if (connector.enabled || connector.token_file_set) {
+      actions.append(button(text(connector.enabled ? 'messaging_disable_arc' : 'messaging_enable_arc'), async () => {
+        if (!canLeave()) return;
+        if (connector.enabled && !root.confirm(text('messaging_confirm_disable_arc'))) return;
+        const result = await mutate(ctx, row, () => request(ctx,
+          '/api/arc/connectors/whatsapp/configure', { enabled: !connector.enabled }));
+        if (result && current(ctx)) { ctx.dirty = false; await open('arcConnectors'); }
+      }));
+    }
+    row.append(actions, form);
     container.append(row);
+  }
+  function renderArcConnectors(ctx, data) {
+    ctx.arcConnector = (data.connectors || []).find(item => item.id === 'arc-whatsapp');
+    if (!ctx.arcConnector) { note(ctx.container, text('messaging_unavailable'), true); return; }
+    const toolbar = element('div', 'messaging-toolbar');
+    toolbar.append(element('span', 'messaging-note', ctx.profile),
+      button(text('messaging_refresh'), () => { if (canLeave()) open('arcConnectors'); }));
+    ctx.container.append(toolbar);
+    connectionSummary(ctx, ctx.container);
   }
   function renderConnections(ctx, data) {
     const toolbar = element('div', 'messaging-toolbar');
@@ -193,16 +247,21 @@
       search,
       button(text('messaging_refresh'), () => { if (canLeave()) open('connections'); }));
     ctx.container.append(toolbar);
-    connectionSummary(ctx, ctx.container);
-    for (const platform of data.platforms || []) {
+    ctx.container.append(element('h2', 'messaging-section-title', text('messaging_gateway_section')));
+    const platforms = [...(data.platforms || [])].sort((left, right) =>
+      (left.id === 'whatsapp' ? -1 : right.id === 'whatsapp' ? 1 : 0));
+    for (const platform of platforms) {
       const card = element('section', 'messaging-card');
       card.dataset.platformId = platform.id;
       const heading = element('div', 'messaging-row');
-      heading.append(element('h2', '', platform.name),
+      heading.append(element('h2', '', platform.id === 'whatsapp' ? text('messaging_gateway_whatsapp') : platform.name),
         element('span', 'messaging-status', platform.state || text('messaging_unknown')));
       card.append(heading);
+      if (platform.id === 'whatsapp') note(card, text('messaging_gateway_whatsapp_note'));
       note(card, platform.description || '');
-      note(card, text(platform.configured ? 'messaging_credentials_saved' : 'messaging_setup_needed'));
+      note(card, text(platform.id === 'whatsapp' && !platform.enabled
+        ? 'messaging_gateway_setup_available'
+        : platform.configured ? 'messaging_credentials_saved' : 'messaging_setup_needed'));
       const form = element('form', 'messaging-config');
       form.hidden = true;
       const enabled = element('input');
@@ -267,6 +326,16 @@
             '/api/messaging/platforms/' + encodeURIComponent(platform.id) + '/test', {}));
           if (result && current(ctx)) feedback(card, result.message, result.ok !== true);
         }));
+      if (platform.id === 'whatsapp' && (platform.enabled || platform.configured)) {
+        actions.append(button(text(platform.enabled ? 'messaging_disable_gateway' : 'messaging_enable_gateway'), async () => {
+          if (!canLeave()) return;
+          if (platform.enabled && !root.confirm(text('messaging_confirm_disable_gateway'))) return;
+          const result = await mutate(ctx, card, () => request(ctx,
+            '/api/messaging/platforms/whatsapp/configure',
+            { enabled: !platform.enabled, env: {}, clear_env: [] }));
+          if (result && current(ctx)) { ctx.dirty = false; await open('connections'); }
+        }));
+      }
       card.append(actions, form);
       ctx.container.append(card);
     }

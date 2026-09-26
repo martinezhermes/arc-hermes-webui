@@ -47,9 +47,10 @@ This gives you nearly **1:1 parity with Hermes CLI from a convenient web UI** wh
 
 ## Contents
 
-ARC messaging: **Connections** manages supported channel configuration and status;
-**Conversations** exposes agent messaging sessions and the available rooms/history
-of an existing ARC WhatsApp connection. Android WebView clients display these
+ARC messaging: **Connections** manages Hermes gateways, **ARC Connectors** binds
+an existing native ARC WhatsApp owner to the selected profile, and
+**Conversations** exposes agent messaging sessions and available native rooms/history.
+Android WebView clients display these
 same screens. See the [messaging workspace guide](docs/messaging-workspace.md) for
 prerequisites, supported operations and native-history limitations.
 

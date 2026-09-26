@@ -46,7 +46,7 @@ actions. The topbar remains focused on conversation context and the workspace/fi
 
 The ARC messaging workspace adds api/messaging.py, static/messaging.js, and
 static/messaging.css. The Python module binds existing agent channel and ARC
-WhatsApp handlers to WebUI authentication/CSRF and an explicit profile. Browser
+WhatsApp and profile-configuration handlers to WebUI authentication/CSRF and an explicit profile. Browser
 state owns cancellation, unsaved edits and deliberate submission. Native clients
 retain credential custody, permission checks, media and operation outcomes.
 See the [messaging workspace contract](docs/messaging-workspace.md).

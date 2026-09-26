@@ -1,13 +1,17 @@
-# Connections and Conversations
+# Connections, ARC Connectors, and Conversations
 
-ARC WebUI provides two messaging surfaces in its desktop rail and mobile menu.
+ARC WebUI provides three messaging surfaces in its desktop rail and mobile menu.
 Android clients displaying this WebUI receive the same screens from the server.
 
 ## Connections
 
-Connections lists the installed ARC Hermes agent's supported channels, including
-Slack, Telegram, Discord and Matrix. Configuration readiness and connection state
-are separate: saving a token does not establish a running connection.
+Connections lists Hermes messaging gateways. The standard Hermes WhatsApp
+gateway is the first card shown. It can be enabled or disabled per profile
+without changing the separate ARC WhatsApp account.
+The other gateway cards include Slack, Telegram, Discord and Matrix.
+Configuration readiness and connection state are separate: saving a token does
+not establish a running connection. A gateway restart is required after a
+configuration change, including a disable.
 
 Configure uses the agent's channel-specific fields and validators. Inputs start
 empty. An empty input preserves its stored value; removing one requires explicit
@@ -16,11 +20,21 @@ are omitted from listing responses. The existing agent service owns profile
 configuration and credential-file writes. Saving does not restart the gateway;
 operators apply connection changes through their deployment's lifecycle procedure.
 
-WhatsApp uses the existing ARC native application binding. Its connection card
-shows account readiness and registered-principal access. The native account owner
-retains pairing/start/stop ownership: the current native HTTP contract does not
-provide these lifecycle operations. This page does not create a second WhatsApp
-session or fall back to legacy Baileys pairing.
+## ARC Connectors
+
+ARC WhatsApp uses the existing native application binding. Its card appears
+in its own ARC Connectors view and shows account readiness and
+registered-principal access. An operator can bind an existing native owner to
+the selected Hermes profile by entering its local API port and the filesystem
+path to a pre-issued private registered credential. The browser never sends
+the credential content, and listing responses report only whether the path is
+set. Enable/disable controls change only this Hermes profile binding. The
+native account owner retains pairing/start/stop ownership: the current native
+HTTP contract does not provide these lifecycle operations.
+The Hermes WhatsApp gateway has its own linked-device state; disabling its
+gateway does not stop ARC WhatsApp, and configuring ARC does not enable the
+gateway. Do not link the same account to both owners without an explicit
+account plan.
 
 ## Conversations
 
@@ -28,7 +42,7 @@ session or fall back to legacy Baileys pairing.
   profile. Search and platform filters operate on profile-scoped metadata.
   Opening a row uses the existing agent-session view. It is not a complete
   platform inbox or an outbound message action.
-- **WhatsApp groups / contacts** queries the connected native application.
+- **ARC WhatsApp groups / contacts** queries the connected native application.
   Selecting a room reads available native history, independently of Hermes
   execution sessions. The current API provides bounded history rather than
   complete synchronization or durable event replay.
@@ -77,10 +91,12 @@ New routes inherit WebUI authentication and POST CSRF enforcement:
 
 | Route | Purpose |
 | --- | --- |
-| GET /api/messaging/connections | Channel configuration and ARC connection status |
+| GET /api/messaging/connections | Hermes gateway configuration and status |
 | GET /api/messaging/conversations | Paginated agent conversation metadata |
 | POST /api/messaging/platforms/{id}/configure | Existing agent configuration |
 | POST /api/messaging/platforms/{id}/test | Existing readiness/status check |
+| GET /api/arc/connectors | ARC binding setup and native connection status |
+| POST /api/arc/connectors/whatsapp/configure | Profile-local ARC binding setup/enable/disable |
 | GET /api/arc/whatsapp/connection | Native account and registered-principal status |
 | POST /api/arc/whatsapp/operations/{operation} | Allowlisted native operations |
 | GET /api/arc/whatsapp/media | Authorized exact-message attachment |

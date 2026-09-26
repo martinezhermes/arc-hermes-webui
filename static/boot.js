@@ -3614,7 +3614,7 @@ window._mirrorSpeechSettingsFromServer=_mirrorSpeechSettingsFromServer;
   if (activeProfileState.status === 'recovery-redirect') return;
   S.activeProfile = activeProfileState.profile;
   S.activeProfileIsDefault = activeProfileState.isDefault;
-  if (window.MessagingWorkspace && ['connections','conversations'].includes(_currentPanel)) {
+  if (window.MessagingWorkspace && ['connections','arcConnectors','conversations'].includes(_currentPanel)) {
     void MessagingWorkspace.open(_currentPanel);
   }
   applyBotName();

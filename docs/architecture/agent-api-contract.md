@@ -1,7 +1,8 @@
 # WebUI to hermes-agent source dependency contract
 
 ARC's [messaging workspace](../messaging-workspace.md) adds an intentional source
-dependency on the installed agent's messaging and ARC WhatsApp handlers.
+dependency on the installed agent's messaging, profile configuration, and ARC
+WhatsApp handlers.
 Authentication and CSRF remain in WebUI; the shared handlers retain configuration
 validation, native credential custody and application authorization. This reuse
 does not remove the agent-checkout dependency or require a second dashboard

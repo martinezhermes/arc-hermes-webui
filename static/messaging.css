@@ -1,8 +1,9 @@
-main.main > #mainConnections,main.main > #mainConversations{display:none;}
-main.main.showing-connections > #mainConnections,main.main.showing-conversations > #mainConversations{display:flex;}
+main.main > #mainConnections,main.main > #mainArcConnectors,main.main > #mainConversations{display:none;}
+main.main.showing-connections > #mainConnections,main.main.showing-arcConnectors > #mainArcConnectors,main.main.showing-conversations > #mainConversations{display:flex;}
 .messaging-workspace{padding:20px 24px;overflow:auto;min-height:0;flex:1;}
 .messaging-toolbar,.messaging-row,.messaging-search{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
 .messaging-toolbar{margin-bottom:18px;}
+.messaging-section-title{font-size:14px;font-weight:650;margin:28px 0 8px;}
 .messaging-search{flex:1;}
 .messaging-search input{flex:1;min-width:140px;}
 .messaging-card{padding:16px 0;border-bottom:1px solid var(--border);max-width:880px;}
