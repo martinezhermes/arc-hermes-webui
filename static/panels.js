@@ -40,11 +40,12 @@ let _logsSeverityFilter = 'all';
 
 // Map of panel names → i18n keys for the app titlebar label.
 const APP_TITLEBAR_KEYS = {
+  connections: 'tab_connections', conversations: 'tab_conversations',
   chat: 'tab_chat', tasks: 'tab_tasks', skills: 'tab_skills',
   memory: 'tab_memory', workspaces: 'tab_workspaces',
   profiles: 'tab_profiles', todos: 'tab_todos', insights: 'tab_insights', logs: 'tab_logs', settings: 'tab_settings',
 };
-const MAIN_VIEW_PANELS = ['settings','skills','memory','tasks','kanban','workspaces','profiles','insights','logs','plugin'];
+const MAIN_VIEW_PANELS = ['connections','conversations','settings','skills','memory','tasks','kanban','workspaces','profiles','insights','logs','plugin'];
 const MAIN_VIEW_SIDEBAR_PANEL_FALLBACKS = { plugin: 'settings' };
 
 /**
@@ -414,6 +415,10 @@ async function switchPanel(name, opts = {}) {
     }
   }
   if (!opts.bypassSettingsGuard && !_beforePanelSwitch(nextPanel)) return false;
+  if (window.MessagingWorkspace) {
+    if (!MessagingWorkspace.canLeave()) return false;
+    MessagingWorkspace.close();
+  }
   if (prevPanel !== 'settings' && nextPanel === 'settings') _beginSettingsPanelSession();
   // Close any long-lived Kanban SSE stream when leaving the kanban panel
   // so we don't keep a stale connection open in the background.
@@ -450,6 +455,7 @@ async function switchPanel(name, opts = {}) {
     });
   }
   // Lazy-load panel data
+  if (nextPanel === 'connections' || nextPanel === 'conversations') await MessagingWorkspace.open(nextPanel, opts);
   if (nextPanel === 'tasks') await loadCrons();
   if (nextPanel === 'kanban') await loadKanban();
   if (nextPanel === 'skills') await loadSkills();
@@ -6984,6 +6990,7 @@ async function switchToProfile(name) {
   // doesn't pre-check) can't flash a skeleton→restore for a click that changes
   // nothing. (#4662 Opus gate)
   if (name && name === S.activeProfile) return true;
+  if (window.MessagingWorkspace && !MessagingWorkspace.canLeave()) return false;
   S._pendingSessionToolsets=null;
   // Profile switches are per-client cookie/TLS scoped, so a running stream in
   // the current session can safely continue while this tab moves to another
@@ -7067,6 +7074,9 @@ async function switchToProfile(name) {
     if (_switchGen !== _profileSwitchGeneration) return false;
     S.activeProfile = data.active || name;
     S.activeProfileIsDefault = !!data.is_default;
+    if (window.MessagingWorkspace && ['connections','conversations'].includes(_currentPanel)) {
+      await MessagingWorkspace.open(_currentPanel);
+    }
     if (typeof _resetCronUnreadForProfileSwitch === 'function') {
       _resetCronUnreadForProfileSwitch();
     }

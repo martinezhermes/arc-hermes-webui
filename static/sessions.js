@@ -2424,8 +2424,29 @@ const _HANDOFF_THRESHOLD = 10;  // conversation rounds
 const _HANDOFF_STORAGE_PREFIX = 'handoff:';
 const _HANDOFF_SUFFIX_DISMISSED_AT = 'dismissed_at';
 const _HANDOFF_SUFFIX_SUMMARY_HANDLED_AT = 'summary_handled_at';
-const _MESSAGING_RAW_SOURCES = new Set(['weixin', 'telegram', 'discord', 'slack', 'email', 'wecom', 'wecom_callback', 'matrix', 'signal']);
+const _MESSAGING_RAW_SOURCES = new Set(['mattermost', 'bluebubbles', 'homeassistant', 'sms', 'dingtalk', 'feishu', 'google_chat', 'qqbot', 'yuanbao', 'buzz', 'photon', 'irc', 'line', 'teams', 'ntfy', 'raft', 'relay', 'simplex', 'whatsapp_cloud', 'whatsapp', 'weixin', 'telegram', 'discord', 'slack', 'email', 'wecom', 'wecom_callback', 'matrix', 'signal']);
 const _MESSAGING_SOURCE_LABELS = {
+  whatsapp: 'WhatsApp',
+  mattermost: "Mattermost",
+  bluebubbles: "BlueBubbles (iMessage)",
+  homeassistant: "Home Assistant",
+  sms: "SMS (Twilio)",
+  dingtalk: "DingTalk",
+  feishu: "Feishu / Lark",
+  google_chat: "Google Chat",
+  qqbot: "QQ Bot",
+  yuanbao: "Yuanbao",
+  buzz: "Buzz",
+  photon: "iMessage via Photon",
+  irc: "IRC",
+  line: "LINE",
+  teams: "Microsoft Teams",
+  ntfy: "ntfy",
+  raft: "Raft",
+  relay: "Relay",
+  simplex: "SimpleX Chat",
+  whatsapp_cloud: "WhatsApp Cloud API",
+
   weixin: 'WeChat',
   telegram: 'Telegram',
   discord: 'Discord',
