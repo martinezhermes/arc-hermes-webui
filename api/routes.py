@@ -13554,6 +13554,9 @@ def _handle_session_get(handler, parsed) -> bool:
 
 def handle_get(handler, parsed) -> bool:
     """Handle all GET routes. Returns True if handled, False for 404."""
+    from api import messaging
+    if messaging.handles(parsed.path):
+        return messaging.handle_get(handler, parsed)
     proxy_result = _handle_extension_sidecar_proxy(handler, parsed, "GET")
     if proxy_result is not False:
         return proxy_result
@@ -15169,6 +15172,13 @@ def handle_post(handler, parsed) -> bool:
     if not _csrf_exempt_path(parsed.path) and not _check_csrf(handler):
         try:
             return j(handler, {"error": _csrf_rejection_error(handler)}, status=403)
+        finally:
+            if diag:
+                diag.finish()
+    from api import messaging
+    if messaging.handles(parsed.path):
+        try:
+            return messaging.handle_post(handler, parsed)
         finally:
             if diag:
                 diag.finish()

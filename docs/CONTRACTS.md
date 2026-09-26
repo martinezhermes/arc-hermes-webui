@@ -95,6 +95,10 @@ that slice.
 
 ## UI, UX, and theme contracts
 
+- [Messaging workspace](messaging-workspace.md): Connections, ARC Connectors, and Conversations,
+  agent-session visibility, native room-history coverage, profile capture,
+  credential custody and deliberate messaging operations.
+
 - [`DESIGN.md`](../DESIGN.md): design tokens and the current calm-console
   direction: conversation first, quiet metadata, restrained accents, and
   progressive disclosure for debugging detail.

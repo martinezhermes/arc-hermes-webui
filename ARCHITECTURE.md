@@ -44,6 +44,13 @@ actions. The topbar remains focused on conversation context and the workspace/fi
 
 ## 2. File Inventory
 
+The ARC messaging workspace adds api/messaging.py, static/messaging.js, and
+static/messaging.css. The Python module binds existing agent channel and ARC
+WhatsApp and profile-configuration handlers to WebUI authentication/CSRF and an explicit profile. Browser
+state owns cancellation, unsaved edits and deliberate submission. Native clients
+retain credential custody, permission checks, media and operation outcomes.
+See the [messaging workspace contract](docs/messaging-workspace.md).
+
     <repo>/
     server.py              Thin routing shell + HTTP Handler + auth middleware.
                            Delegates all route handling to api/routes.py.

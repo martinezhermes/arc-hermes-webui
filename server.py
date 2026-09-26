@@ -368,6 +368,9 @@ class Handler(BaseHTTPRequestHandler):
         }
         if forwarded_for:
             record_data['forwarded_for'] = forwarded_for
+        if record_data['path'].startswith('/api/messaging/conversations'):
+            # Conversation search text may contain private names or topics.
+            record_data['path'] = record_data['path'].split('?', 1)[0]
         record = _json.dumps(record_data)
         self._safe_webui_print(f'[webui] {record}')
 
